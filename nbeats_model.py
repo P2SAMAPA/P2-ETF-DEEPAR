@@ -27,7 +27,6 @@ class NBEATSBlock(nn.Module):
         self.theta_forecast = nn.Linear(hidden_size, thetas_dim)
 
     def forward(self, x):
-        # x shape: (batch, backcast_length)
         out = torch.relu(self.fc1(x))
         out = torch.relu(self.fc2(out))
         out = torch.relu(self.fc3(out))
@@ -44,22 +43,23 @@ class TrendStack(nn.Module):
             self.blocks.append(NBEATSBlock(
                 input_size=backcast_length,
                 hidden_size=hidden_size,
-                thetas_dim=4,  # 2 for polynomial (trend) + 2 for forecast
+                thetas_dim=4,
                 backcast_length=backcast_length,
                 forecast_length=forecast_length
             ))
+        self.backcast_length = backcast_length
+        self.forecast_length = forecast_length
 
     def forward(self, x):
         backcast = x
-        forecast = torch.zeros(x.size(0), forecast_length).to(x.device)
+        forecast = torch.zeros(x.size(0), self.forecast_length).to(x.device)
         for block in self.blocks:
             theta_b, theta_f = block(backcast)
-            # Trend basis: polynomial
-            t = torch.linspace(0, 1, backcast_length).to(x.device)
-            backcast_basis = torch.stack([t**i for i in range(4)], dim=1)  # (backcast_length, 4)
-            backcast_block = theta_b @ backcast_basis.T  # (batch, backcast_length)
+            t = torch.linspace(0, 1, self.backcast_length).to(x.device)
+            backcast_basis = torch.stack([t**i for i in range(4)], dim=1)
+            backcast_block = theta_b @ backcast_basis.T
 
-            t_f = torch.linspace(0, 1, forecast_length).to(x.device)
+            t_f = torch.linspace(0, 1, self.forecast_length).to(x.device)
             forecast_basis = torch.stack([t_f**i for i in range(4)], dim=1)
             forecast_block = theta_f @ forecast_basis.T
 
@@ -75,18 +75,19 @@ class SeasonalityStack(nn.Module):
             self.blocks.append(NBEATSBlock(
                 input_size=backcast_length,
                 hidden_size=hidden_size,
-                thetas_dim=8,  # Fourier basis (4 harmonics * 2)
+                thetas_dim=8,
                 backcast_length=backcast_length,
                 forecast_length=forecast_length
             ))
+        self.backcast_length = backcast_length
+        self.forecast_length = forecast_length
 
     def forward(self, x):
         backcast = x
-        forecast = torch.zeros(x.size(0), forecast_length).to(x.device)
+        forecast = torch.zeros(x.size(0), self.forecast_length).to(x.device)
         for block in self.blocks:
             theta_b, theta_f = block(backcast)
-            # Fourier basis
-            t = torch.linspace(0, 1, backcast_length).to(x.device)
+            t = torch.linspace(0, 1, self.backcast_length).to(x.device)
             basis = []
             for k in range(1, 5):
                 basis.append(torch.sin(2 * np.pi * k * t))
@@ -94,7 +95,7 @@ class SeasonalityStack(nn.Module):
             backcast_basis = torch.stack(basis, dim=1)
             backcast_block = theta_b @ backcast_basis.T
 
-            t_f = torch.linspace(0, 1, forecast_length).to(x.device)
+            t_f = torch.linspace(0, 1, self.forecast_length).to(x.device)
             basis_f = []
             for k in range(1, 5):
                 basis_f.append(torch.sin(2 * np.pi * k * t_f))
@@ -110,6 +111,7 @@ class NBEATS(nn.Module):
     def __init__(self, backcast_length, forecast_length, stack_types, n_blocks_per_stack,
                  hidden_size, thetas_dim):
         super().__init__()
+        self.forecast_length = forecast_length
         self.stacks = nn.ModuleList()
         for stack_type in stack_types:
             if stack_type == "trend":
@@ -122,8 +124,7 @@ class NBEATS(nn.Module):
                 raise ValueError(f"Unknown stack type: {stack_type}")
 
     def forward(self, x):
-        # x: (batch, backcast_length)
-        forecast = torch.zeros(x.size(0), forecast_length).to(x.device)
+        forecast = torch.zeros(x.size(0), self.forecast_length).to(x.device)
         for stack in self.stacks:
             _, stack_forecast = stack(x)
             forecast = forecast + stack_forecast
@@ -182,7 +183,7 @@ class NBEATSTrainer:
             stack_types=self.stack_types,
             n_blocks_per_stack=self.n_blocks_per_stack,
             hidden_size=self.hidden_size,
-            thetas_dim=4  # Not directly used in stacks; each stack defines its own
+            thetas_dim=4
         ).to(self.device)
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
