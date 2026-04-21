@@ -25,20 +25,32 @@ UNIVERSES = {
     "COMBINED": ALL_TICKERS
 }
 
-# --- DeepAR Parameters (Increased Complexity) ---
-CONTEXT_LENGTH = 126                  # Past days used as input (~6 months)
-PREDICTION_LENGTH = 22                # Forecast up to 22 days ahead
-HIDDEN_SIZE = 128                     # LSTM hidden size (increased from 32)
-NUM_LAYERS = 3                        # LSTM layers (increased from 2)
-EPOCHS = 100                          # More epochs
-BATCH_SIZE = 32                       # Smaller batch for better generalization
-LEARNING_RATE = 0.0005                # Slightly lower learning rate
-EARLY_STOP_PATIENCE = 10              # More patience before stopping
-RANDOM_SEED = 42
-MIN_OBSERVATIONS = 504                # Minimum data required (2 years)
+# --- DeepAR Parameters ---
+DEEPAR_CONTEXT_LENGTH = 126
+DEEPAR_PREDICTION_LENGTH = 22
+DEEPAR_HIDDEN_SIZE = 128
+DEEPAR_NUM_LAYERS = 3
+DEEPAR_EPOCHS = 100
+DEEPAR_BATCH_SIZE = 32
+DEEPAR_LEARNING_RATE = 0.0005
+DEEPAR_EARLY_STOP_PATIENCE = 10
 
-# --- Forecasting ---
-FORECAST_HORIZONS = [1, 5, 22]        # Horizons to output
+# --- N-BEATS Parameters ---
+NBEATS_CONTEXT_LENGTH = 126          # Input window (same as DeepAR for consistency)
+NBEATS_PREDICTION_LENGTH = 22        # Forecast horizon
+NBEATS_STACK_TYPES = ["trend", "seasonality"]  # N-BEATS interpretable stacks
+NBEATS_N_BLOCKS_PER_STACK = 3        # Blocks per stack
+NBEATS_THEO_DIM = 4                  # Theta dimensions (for trend/seasonality)
+NBEATS_HIDDEN_SIZE = 128             # Hidden layer size in each block
+NBEATS_EPOCHS = 100
+NBEATS_BATCH_SIZE = 32
+NBEATS_LEARNING_RATE = 0.0005
+NBEATS_EARLY_STOP_PATIENCE = 10
+
+# --- Common Parameters ---
+RANDOM_SEED = 42
+MIN_OBSERVATIONS = 504
+FORECAST_HORIZONS = [1, 5, 22]
 
 # --- Shrinking Windows ---
 SHRINKING_WINDOW_START_YEARS = list(range(2010, 2025))
