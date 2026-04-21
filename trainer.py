@@ -39,7 +39,8 @@ def run_deepar():
             returns = data_manager.prepare_returns_series(df_master, ticker)
             if len(returns) < config.MIN_OBSERVATIONS:
                 continue
-            recent = returns.iloc[-config.MIN_OBSERVATIONS*2:].values  # use ample data
+            # Use up to 4 years of data for training (more data)
+            recent = returns.iloc[-min(len(returns), 1008):].values
             success = trainer.fit(recent)
             if not success:
                 continue
