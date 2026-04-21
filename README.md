@@ -1,15 +1,18 @@
-# P2-ETF-DEEPAR
+# P2-ETF-DEEPAR + N‑BEATS
 
-**DeepAR Probabilistic Multi‑Horizon Forecasting for ETF Selection**
+**Multi‑Horizon Probabilistic Forecasting with DeepAR and N‑BEATS for ETF Selection**
 
 [![Daily Run](https://github.com/P2SAMAPA/P2-ETF-DEEPAR/actions/workflows/daily_run.yml/badge.svg)](https://github.com/P2SAMAPA/P2-ETF-DEEPAR/actions/workflows/daily_run.yml)
 [![Hugging Face Dataset](https://img.shields.io/badge/🤗%20Dataset-p2--etf--deepar--results-blue)](https://huggingface.co/datasets/P2SAMAPA/p2-etf-deepar-results)
 
 ## Overview
 
-`P2-ETF-DEEPAR` uses **DeepAR**, an autoregressive recurrent neural network (LSTM), to generate probabilistic forecasts of ETF returns at multiple horizons (1‑day, 5‑day, 22‑day). The engine ranks ETFs by their 1‑day forecast and displays the top picks per universe, along with the full term‑structure of expected returns.
+`P2-ETF-DEEPAR` now combines two state‑of‑the‑art time‑series forecasting models:
 
-DeepAR is well‑suited for time series with complex patterns and provides a unified view across short, medium, and longer‑term horizons.
+- **DeepAR**: An autoregressive LSTM‑based probabilistic model that captures complex temporal patterns.
+- **N‑BEATS**: A deep neural network with interpretable trend and seasonality stacks.
+
+Both models are trained on up to 4 years of daily log returns for each ETF and produce forecasts at 1‑day, 5‑day, and 22‑day horizons. The dashboard displays the top picks and full forecast tables for each model in separate tabs.
 
 ## Universe Coverage
 
@@ -23,21 +26,31 @@ Data is sourced from: [`P2SAMAPA/fi-etf-macro-signal-master-data`](https://huggi
 
 ## Methodology
 
-1. **Data Preparation**: Log returns are computed from daily closing prices.
-2. **Sequence Creation**: Sliding windows of 60 past days are used as input to predict the next 22 days.
-3. **Model Architecture**: Two‑layer LSTM with 32 hidden units, trained to minimize MSE.
-4. **Training**: One model per ETF, with early stopping to prevent overfitting.
-5. **Forecasting**: The model produces point forecasts for horizons 1, 5, and 22 days.
-6. **Ranking**: ETFs are ranked within each universe by the 1‑day forecast (annualized).
+### DeepAR
+- **Context window**: 126 trading days (~6 months)
+- **Architecture**: 3‑layer LSTM with 128 hidden units
+- **Training**: 100 epochs with early stopping (patience=10)
+- **Forecast**: Autoregressive decoding for 22 days ahead
+
+### N‑BEATS
+- **Context window**: 126 trading days
+- **Architecture**: Two interpretable stacks (trend + seasonality), each with 3 blocks
+- **Hidden size**: 128
+- **Training**: 100 epochs with early stopping
+- **Forecast**: Direct multi‑horizon output
+
+### Ranking
+ETFs are ranked within each universe by their **1‑day forecast** (annualized). The top 3 are displayed as hero picks.
 
 ## File Structure
 P2-ETF-DEEPAR/
-├── config.py # Paths, universes, DeepAR parameters
+├── config.py # Paths, universes, DeepAR & N‑BEATS parameters
 ├── data_manager.py # Data loading and preprocessing
-├── deepar_model.py # DeepAR model implementation (PyTorch)
-├── trainer.py # Main orchestration script
+├── deepar_model.py # DeepAR implementation (PyTorch)
+├── nbeats_model.py # N‑BEATS implementation (PyTorch)
+├── trainer.py # Orchestrates training for both models
 ├── push_results.py # Upload results to Hugging Face
-├── streamlit_app.py # Interactive dashboard
+├── streamlit_app.py # Interactive dashboard (two main tabs)
 ├── us_calendar.py # U.S. market calendar utilities
 ├── requirements.txt # Python dependencies
 ├── .github/workflows/ # Scheduled GitHub Action
@@ -49,14 +62,16 @@ text
 
 Key parameters in `config.py`:
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `CONTEXT_LENGTH` | 60 | Past days used as input |
-| `PREDICTION_LENGTH` | 22 | Maximum forecast horizon |
-| `HIDDEN_SIZE` | 32 | LSTM hidden units |
-| `NUM_LAYERS` | 2 | LSTM layers |
-| `EPOCHS` | 50 | Training epochs |
-| `EARLY_STOP_PATIENCE` | 5 | Stop if no validation improvement |
+| Parameter | DeepAR | N‑BEATS |
+|-----------|--------|---------|
+| Context length | 126 | 126 |
+| Hidden size | 128 | 128 |
+| Layers / Stacks | 3 LSTM layers | 2 stacks (trend + seasonality) |
+| Blocks per stack | – | 3 |
+| Epochs | 100 | 100 |
+| Batch size | 32 | 32 |
+| Learning rate | 0.0005 | 0.0005 |
+| Early stopping patience | 10 | 10 |
 
 ## Running Locally
 
@@ -68,18 +83,31 @@ export HF_TOKEN="your_token_here"
 python trainer.py
 streamlit run streamlit_app.py
 Dashboard Features
-Hero Card: Top pick with 1‑day, 5‑day, and 22‑day forecasts.
+Two Main Tabs: Switch between DeepAR and N‑BEATS forecasts.
 
-Multi‑Horizon Table: All ETFs ranked by 1‑day forecast, showing full term‑structure.
+Sub‑tabs per Universe: Combined, Equity Sectors, and FI/Commodities.
+
+Hero Cards: Top pick with 1‑day, 5‑day, and 22‑day forecasts.
+
+Full Forecast Table: All ETFs ranked by 1‑day forecast, showing complete term‑structure.
 
 Next Trading Day: U.S. market calendar integration.
 
+Performance
+Training time: ~1.5–2 hours on GitHub Actions (CPU only)
+
+Inference: < 1 second per ETF
+
+Data used: Most recent ~4 years (up to 1,008 trading days) per ETF
+
 Integration with Other Engines
-DeepAR's multi‑horizon forecasts can be used to:
+The multi‑horizon forecasts can be used to:
 
-Blend with single‑horizon engines (BSTS, Particle Filter) for a consensus signal.
+Blend with single‑horizon engines (BSTS, Particle Filter) for consensus signals.
 
-Detect term‑structure inversions (e.g., bullish 1‑day but bearish 22‑day) to adjust position sizing.
+Detect term‑structure inversions (e.g., bullish 1‑day but bearish 22‑day).
+
+Adjust position sizing based on forecast confidence.
 
 License
 MIT License
