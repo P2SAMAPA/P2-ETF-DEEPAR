@@ -10,18 +10,38 @@ from sklearn.preprocessing import StandardScaler
 import copy
 
 class DeepAR(nn.Module):
-    def __init__(self, input_size=1, hidden_size=32, num_layers=2, output_size=1):
+    def __init__(self, input_size=1, hidden_size=32, num_layers=2, pred_len=22):
         super().__init__()
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
-        self.fc = nn.Linear(hidden_size, output_size)
+        self.fc = nn.Linear(hidden_size, 1)
+        self.pred_len = pred_len
         self.num_layers = num_layers
         self.hidden_size = hidden_size
 
     def forward(self, x, hidden=None):
-        # x shape: (batch, seq_len, input_size)
-        out, hidden = self.lstm(x, hidden)
-        out = self.fc(out)  # (batch, seq_len, output_size)
-        return out, hidden
+        # x shape: (batch, context_len, input_size)
+        batch_size = x.size(0)
+        if hidden is None:
+            h0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(x.device)
+            c0 = torch.zeros(self.num_layers, batch_size, self.hidden_size).to(x.device)
+            hidden = (h0, c0)
+
+        # Encode the context
+        _, hidden = self.lstm(x, hidden)
+
+        # Generate forecasts autoregressively
+        outputs = []
+        # Last input value to start decoding
+        dec_input = x[:, -1:, :]  # (batch, 1, input_size)
+
+        for _ in range(self.pred_len):
+            out, hidden = self.lstm(dec_input, hidden)
+            pred = self.fc(out)  # (batch, 1, 1)
+            outputs.append(pred)
+            dec_input = pred  # use prediction as next input
+
+        outputs = torch.cat(outputs, dim=1)  # (batch, pred_len, 1)
+        return outputs
 
 class DeepARTrainer:
     def __init__(self, context_len=60, pred_len=22, hidden_size=32, num_layers=2,
@@ -45,7 +65,6 @@ class DeepARTrainer:
 
     def fit(self, series: np.ndarray):
         """Train DeepAR on a univariate time series."""
-        # Scale data
         scaled = self.scaler.fit_transform(series.reshape(-1, 1)).flatten()
 
         # Create sequences
@@ -72,7 +91,7 @@ class DeepARTrainer:
         val_loader = DataLoader(val_dataset, batch_size=self.batch_size)
 
         self.model = DeepAR(input_size=1, hidden_size=self.hidden_size,
-                            num_layers=self.num_layers, output_size=1).to(self.device)
+                            num_layers=self.num_layers, pred_len=self.pred_len).to(self.device)
         optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
         criterion = nn.MSELoss()
 
@@ -86,7 +105,7 @@ class DeepARTrainer:
             for batch_X, batch_y in train_loader:
                 batch_X, batch_y = batch_X.to(self.device), batch_y.to(self.device)
                 optimizer.zero_grad()
-                output, _ = self.model(batch_X)
+                output = self.model(batch_X)  # (batch, pred_len, 1)
                 loss = criterion(output, batch_y)
                 loss.backward()
                 optimizer.step()
@@ -98,7 +117,7 @@ class DeepARTrainer:
             with torch.no_grad():
                 for batch_X, batch_y in val_loader:
                     batch_X, batch_y = batch_X.to(self.device), batch_y.to(self.device)
-                    output, _ = self.model(batch_X)
+                    output = self.model(batch_X)
                     loss = criterion(output, batch_y)
                     val_loss += loss.item() * batch_X.size(0)
             val_loss /= len(val_loader.dataset)
@@ -123,10 +142,9 @@ class DeepARTrainer:
         scaled = self.scaler.transform(recent_series.reshape(-1, 1)).flatten()
         input_seq = torch.tensor(scaled[-self.context_len:], dtype=torch.float32).view(1, -1, 1).to(self.device)
 
-        # Monte Carlo dropout or just single deterministic forecast
         with torch.no_grad():
-            output, _ = self.model(input_seq)
-            pred = output[0, :self.pred_len, 0].cpu().numpy()
+            output = self.model(input_seq)  # (1, pred_len, 1)
+            pred = output[0, :, 0].cpu().numpy()
         pred = self.scaler.inverse_transform(pred.reshape(-1, 1)).flatten()
 
         forecasts = {}
