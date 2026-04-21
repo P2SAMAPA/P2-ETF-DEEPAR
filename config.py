@@ -25,20 +25,20 @@ UNIVERSES = {
     "COMBINED": ALL_TICKERS
 }
 
-# --- DeepAR Parameters ---
-CONTEXT_LENGTH = 60                  # Past days used as input
-PREDICTION_LENGTH = 22               # Forecast up to 22 days ahead
-HIDDEN_SIZE = 32                     # LSTM hidden size
-NUM_LAYERS = 2                       # LSTM layers
-EPOCHS = 30                          # Training epochs (reduced for GitHub Actions)
-BATCH_SIZE = 64
-LEARNING_RATE = 0.001
-EARLY_STOP_PATIENCE = 5              # Stop if no validation improvement
+# --- DeepAR Parameters (Increased Complexity) ---
+CONTEXT_LENGTH = 126                  # Past days used as input (~6 months)
+PREDICTION_LENGTH = 22                # Forecast up to 22 days ahead
+HIDDEN_SIZE = 128                     # LSTM hidden size (increased from 32)
+NUM_LAYERS = 3                        # LSTM layers (increased from 2)
+EPOCHS = 100                          # More epochs
+BATCH_SIZE = 32                       # Smaller batch for better generalization
+LEARNING_RATE = 0.0005                # Slightly lower learning rate
+EARLY_STOP_PATIENCE = 10              # More patience before stopping
 RANDOM_SEED = 42
-MIN_OBSERVATIONS = 252               # Minimum data required
+MIN_OBSERVATIONS = 504                # Minimum data required (2 years)
 
 # --- Forecasting ---
-FORECAST_HORIZONS = [1, 5, 22]       # Horizons to output
+FORECAST_HORIZONS = [1, 5, 22]        # Horizons to output
 
 # --- Shrinking Windows ---
 SHRINKING_WINDOW_START_YEARS = list(range(2010, 2025))
